@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <title>JSON no Google Drive</title>
+  <!-- Biblioteca oficial de autenticação do Google -->
+  <script src="https://google.com" async defer></script>
+</head>
+<body>
+  <button id="btn-login">Conectar ao Google Drive</button>
+  <button id="btn-salvar" disabled>Salvar JSON</button>
+  <button id="btn-ler" disabled>Ler JSON</button>
+  <pre id="saida"></pre>
+
+  <script>
+    const CLIENT_ID = '473852471364-r4q7p6qcs7tvoov8i1mlie3ju0e13js1.apps.googleusercontent.com://googleusercontent.com';
+    const SCOPES = 'https://googleapis.com';
+    
+    let tokenClient;
+    let accessToken = null;
+    let fileId = null; // Guardará o ID do arquivo criado no Drive
+
+    // 1. Inicializa o cliente de autenticação quando a página carrega
+    window.onload = () => {
+      tokenClient = google.accounts.oauth2.initTokenClient({
+        client_id: CLIENT_ID,
+        scope: SCOPES,
+        callback: (response) => {
+          if (response.error) {
+            console.error(response);
+            return;
+          }
+          accessToken = response.access_token;
+          document.getElementById('btn-salvar').disabled = false;
+          document.getElementById('btn-ler').disabled = false;
+          log('Autenticado com sucesso!');
+        },
+      });
+    };
+
+    // Solicita login ao clicar
+    document.getElementById('btn-login').onclick = () => {
+      tokenClient.requestAccessToken();
+    };
+
+    // 2. Escrever (Criar ou Atualizar) JSON no Google Drive
+    document.getElementById('btn-salvar').onclick = async () => {
+      const meusDados = {
+        usuario: "João",
+        atualizadoEm: new Date().toISOString(),
+        configuracoes: { tema: "escuro", notificacoes: true }
+      };
+
+      const metadata = {
+        name: 'dados_app.json',
+        mimeType: 'application/json'
+      };
+
+      // Monta o corpo multipart (Metadados + Conteúdo do arquivo)
+      const form = new FormData();
+      form.append('metadata', new Blob([JSON.stringify(metadata)], { type: 'application/json' }));
+      form.append('file', new Blob([JSON.stringify(meusDados, null, 2)], { type: 'application/json' }));
+
+      // Se já temos o fileId, usamos PATCH para atualizar; senão, POST para criar
+      const url = fileId 
+        ? `https://googleapis.com{fileId}?uploadType=multipart`
+        : 'https://googleapis.com';
+      
+      const method = fileId ? 'PATCH' : 'POST';
+
+      const res = await fetch(url, {
+        method: method,
+        headers: { Authorization: `Bearer ${accessToken}` },
+        body: form
+      });
+
+      const data = await res.json();
+      fileId = data.id; // Salva o ID para futuras leituras/atualizações
+      log(`Arquivo salvo! ID: ${fileId}`);
+    };
+
+    // 3. Ler o JSON do Google Drive
+    document.getElementById('btn-ler').onclick = async () => {
+      if (!fileId) {
+        log('Salve um arquivo primeiro (ou busque pelo nome).');
+        return;
+      }
+
+      // O parâmetro ?alt=media instrui a API a retornar o conteúdo do arquivo, e não os metadados
+      const res = await fetch(`https://googleapis.com{fileId}?alt=media`, {
+        headers: { Authorization: `Bearer ${accessToken}` }
+      });
+
+      const jsonLido = await res.json();
+      log('Conteúdo lido do Drive:\n' + JSON.stringify(jsonLido, null, 2));
+    };
+
+    function log(texto) {
+      document.getElementById('saida').textContent = texto;
+    }
+  </script>
+</body>
+</html>
