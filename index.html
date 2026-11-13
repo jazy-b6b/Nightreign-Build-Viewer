@@ -3,11 +3,8 @@
   <head>
     <meta charset="UTF-8" />
     <title>JSON no Google Drive</title>
-    <!-- Biblioteca oficial de autenticação do Google -->
-    <script src="https://google.com" async defer></script>
-
-    <script src="https://accounts.google.com/gsi/client"></script>
-    <script src="https://apis.google.com/js/api.js"></script>
+    <!-- Script correto e atualizado do Google Identity Services -->
+    <script src="https://accounts.google.com/gsi/client" async defer></script>
   </head>
   <body>
     <button id="btn-login">Conectar ao Google Drive</button>
@@ -16,15 +13,15 @@
     <pre id="saida"></pre>
 
     <script>
-      const CLIENT_ID =
-        "473852471364-r4q7p6qcs7tvoov8i1mlie3ju0e13js1.apps.googleusercontent.com://googleusercontent.com";
-      const SCOPES = "https://googleapis.com";
+      const CLIENT_ID = "473852471364-r4q7p6qcs7tvoov8i1mlie3ju0e13js1.apps.googleusercontent.com://googleusercontent.com"; // Insira seu Client ID real
+
+      // CORREÇÃO 1: Escopo correto para Drive
+      const SCOPES = "https://www.googleapis.com/auth/drive.file";
 
       let tokenClient;
       let accessToken = null;
-      let fileId = null; // Guardará o ID do arquivo criado no Drive
+      let fileId = null;
 
-      // 1. Inicializa o cliente de autenticação quando a página carrega
       window.onload = () => {
         tokenClient = google.accounts.oauth2.initTokenClient({
           client_id: CLIENT_ID,
@@ -42,12 +39,10 @@
         });
       };
 
-      // Solicita login ao clicar
       document.getElementById("btn-login").onclick = () => {
         tokenClient.requestAccessToken();
       };
 
-      // 2. Escrever (Criar ou Atualizar) JSON no Google Drive
       document.getElementById("btn-salvar").onclick = async () => {
         const meusDados = {
           usuario: "João",
@@ -60,7 +55,6 @@
           mimeType: "application/json",
         };
 
-        // Monta o corpo multipart (Metadados + Conteúdo do arquivo)
         const form = new FormData();
         form.append(
           "metadata",
@@ -73,38 +67,47 @@
           }),
         );
 
-        // Se já temos o fileId, usamos PATCH para atualizar; senão, POST para criar
+        // CORREÇÃO 2 e 3: URLs oficiais da API e sintaxe correta (${fileId})
         const url = fileId
-          ? `https://googleapis.com{fileId}?uploadType=multipart`
-          : "https://googleapis.com";
+          ? `https://www.googleapis.com/upload/drive/v3/files/${fileId}?uploadType=multipart`
+          : "https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart";
 
         const method = fileId ? "PATCH" : "POST";
 
-        const res = await fetch(url, {
-          method: method,
-          headers: { Authorization: `Bearer ${accessToken}` },
-          body: form,
-        });
+        try {
+          const res = await fetch(url, {
+            method: method,
+            headers: { Authorization: `Bearer ${accessToken}` },
+            body: form,
+          });
 
-        const data = await res.json();
-        fileId = data.id; // Salva o ID para futuras leituras/atualizações
-        log(`Arquivo salvo! ID: ${fileId}`);
+          const data = await res.json();
+          fileId = data.id;
+          log(`Arquivo salvo! ID: ${fileId}`);
+        } catch (err) {
+          log("Erro ao salvar: " + err.message);
+        }
       };
 
-      // 3. Ler o JSON do Google Drive
       document.getElementById("btn-ler").onclick = async () => {
         if (!fileId) {
           log("Salve um arquivo primeiro (ou busque pelo nome).");
           return;
         }
 
-        // O parâmetro ?alt=media instrui a API a retornar o conteúdo do arquivo, e não os metadados
-        const res = await fetch(`https://googleapis.com{fileId}?alt=media`, {
-          headers: { Authorization: `Bearer ${accessToken}` },
-        });
+        // CORREÇÃO 2 e 3: URL oficial para leitura e sintaxe ${fileId}
+        const url = `https://www.googleapis.com/drive/v3/files/${fileId}?alt=media`;
 
-        const jsonLido = await res.json();
-        log("Conteúdo lido do Drive:\n" + JSON.stringify(jsonLido, null, 2));
+        try {
+          const res = await fetch(url, {
+            headers: { Authorization: `Bearer ${accessToken}` },
+          });
+
+          const jsonLido = await res.json();
+          log("Conteúdo lido do Drive:\n" + JSON.stringify(jsonLido, null, 2));
+        } catch (err) {
+          log("Erro ao ler: " + err.message);
+        }
       };
 
       function log(texto) {
